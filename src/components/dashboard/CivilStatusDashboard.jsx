@@ -13,6 +13,22 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+// Auto-fill missing years in civil status dataset
+const normalizeCivilStatusData = (data, allYears, keys) => {
+  const yearMap = new Map(data.map((row) => [row.year, row]));
+
+  return allYears.map((year) => {
+    if (yearMap.has(year)) return yearMap.get(year);
+
+    // If year missing → fill with zero values
+    const emptyRow = { year };
+    keys.forEach((key) => {
+      emptyRow[key] = 0;
+    });
+    return emptyRow;
+  });
+};
+
 const CivilStatusDashboard = () => {
   const [emigrants, setEmigrants] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("All");
@@ -32,16 +48,35 @@ const CivilStatusDashboard = () => {
 
   const allStatusKeys = Object.keys(placeholders);
 
+  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       const data = await getEmigrants();
-      setEmigrants(data);
+      console.log("Civil status response:", data);
+
+      if (!Array.isArray(data) || data.length === 0) {
+        setEmigrants([]);
+        return;
+      }
+
+      // Extract all unique years
+      const allYears = Array.from(new Set(data.map((d) => d.year))).sort(
+        (a, b) => a - b
+      );
+
+      // Normalize dataset — fill missing years
+      const normalized = normalizeCivilStatusData(data, allYears, allStatusKeys);
+
+      setEmigrants(normalized);
     };
+
     fetchData();
   }, []);
 
   // Unique years for dropdown
-  const years = [...new Set(emigrants.map((row) => row.year))].sort((a, b) => a - b);
+  const years = [...new Set(emigrants.map((row) => row.year))].sort(
+    (a, b) => a - b
+  );
 
   // Filter logic
   const filteredData = emigrants.filter((row) => {
@@ -60,12 +95,13 @@ const CivilStatusDashboard = () => {
       acc[key] = filteredData.reduce((sum, row) => sum + (row[key] || 0), 0);
       return acc;
     }, {});
+
     chartData = allStatusKeys.map((key) => ({
       category: placeholders[key],
       count: totals[key],
     }));
   } else {
-    // Yearly trend for a single status
+    // Trend for one status over years
     chartData = filteredData
       .slice()
       .sort((a, b) => a.year - b.year)
@@ -75,13 +111,12 @@ const CivilStatusDashboard = () => {
       }));
   }
 
-  // Total counts for badges
+  // Total counts badges
   const totalCounts = allStatusKeys.reduce((acc, key) => {
     acc[key] = filteredData.reduce((sum, row) => sum + (row[key] || 0), 0);
     return acc;
   }, {});
 
-  // Single consistent color (same for bars, lines, and badges)
   const mainColor = "#8884d8";
 
   return (
@@ -135,7 +170,7 @@ const CivilStatusDashboard = () => {
         </div>
       </div>
 
-      {/* Total counts badges (matching graph color) */}
+      {/* Badges */}
       <div
         style={{
           display: "flex",
@@ -161,7 +196,7 @@ const CivilStatusDashboard = () => {
         ))}
       </div>
 
-      {/* Chart Type Tabs */}
+      {/* Chart Type Toggle */}
       <div style={{ textAlign: "center", marginBottom: "20px" }}>
         <button
           onClick={() => setChartType("bar")}
@@ -177,6 +212,7 @@ const CivilStatusDashboard = () => {
         >
           Bar Graph
         </button>
+
         <button
           onClick={() => setChartType("line")}
           style={{

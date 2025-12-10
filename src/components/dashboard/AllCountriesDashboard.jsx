@@ -66,6 +66,7 @@ const AllCountriesDashboard = () => {
     const fetchData = async () => {
       try {
         const data = await getAllCountriesGroups();
+        console.log("AllCountriesDashboard data:", data);
         setAllCountriesGroups(data);
       } catch (err) {
         console.error("Error fetching All Countries data:", err);

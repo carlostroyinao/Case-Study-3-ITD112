@@ -10,6 +10,7 @@ const SexTable = () => {
   const [selectedSex, setSelectedSex] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [editId, setEditId] = useState(null);
 
   const [form, setForm] = useState({ year: "", male: "", female: "" });
@@ -46,6 +47,22 @@ const SexTable = () => {
   // --- Delete Record ---
   const handleDelete = async (id) => {
     await deleteSexGroup(id);
+    fetchData();
+  };
+
+  // --- Delete All Records ---
+  const handleDeleteAll = () => {
+    if (!sexGroups.length) return;
+    setShowDeleteAllModal(true);
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (!sexGroups.length) {
+      setShowDeleteAllModal(false);
+      return;
+    }
+    await Promise.all(sexGroups.map((row) => deleteSexGroup(row.id)));
+    setShowDeleteAllModal(false);
     fetchData();
   };
 
@@ -139,23 +156,37 @@ const SexTable = () => {
           </select>
         </div>
 
-        <button
-          onClick={() => {
-            setForm({ year: "", male: "", female: "" }); // Reset form when opening Add modal
-            setShowModal(true);
-          }}
-          style={{
-            marginLeft: "auto",
-            backgroundColor: "#007bff",
-            color: "white",
-            padding: "8px 16px",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          + Add Record
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto" }}>
+          <button
+            onClick={() => {
+              setForm({ year: "", male: "", female: "" }); // Reset form when opening Add modal
+              setShowModal(true);
+            }}
+            style={{
+              backgroundColor: "#007bff",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            + Add Record
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            style={{
+              backgroundColor: "#dc3545",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            Delete All
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -207,6 +238,9 @@ const SexTable = () => {
           </tbody>
         </table>
       </div>
+
+      {displayedData.length === 0 && <div style={{ height: '400px' }} />}
+
 
       {/* --- Add Modal --- */}
       {showModal && (
@@ -281,6 +315,28 @@ const SexTable = () => {
             <div className="modal-actions">
               <button onClick={handleUpdate} className="save-btn">Update</button>
               <button onClick={() => setShowEditModal(false)} className="cancel-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteAllModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Delete All Sex Records</h3>
+            <p style={{ margin: "10px 0 20px" }}>
+              Are you sure you want to delete all sex records? This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button onClick={handleConfirmDeleteAll} className="save-btn">
+                Yes, Delete All
+              </button>
+              <button
+                onClick={() => setShowDeleteAllModal(false)}
+                className="cancel-btn"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

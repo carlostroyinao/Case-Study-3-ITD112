@@ -6,6 +6,7 @@ const CivilStatusTable = () => {
   const [emigrants, setEmigrants] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [editId, setEditId] = useState(null);
 
   const [form, setForm] = useState({
@@ -105,6 +106,22 @@ const CivilStatusTable = () => {
     fetchData();
   };
 
+  // --- Delete All Records ---
+  const handleDeleteAll = () => {
+    if (!emigrants.length) return;
+    setShowDeleteAllModal(true);
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (!emigrants.length) {
+      setShowDeleteAllModal(false);
+      return;
+    }
+    await Promise.all(emigrants.map((row) => deleteEmigrant(row.id)));
+    setShowDeleteAllModal(false);
+    fetchData();
+  };
+
   // --- Filter & Table logic ---
   const years = [...new Set(emigrants.map((row) => row.year))].sort(
     (a, b) => b - a
@@ -189,31 +206,45 @@ const CivilStatusTable = () => {
         </div>
 
         {/* Add Record Button */}
-        <button
-          onClick={() => {
-            setForm({
-              year: "",
-              single: "",
-              married: "",
-              widower: "",
-              separated: "",
-              divorced: "",
-              notReported: "",
-            }); // reset form when opening
-            setShowModal(true);
-          }}
-          style={{
-            marginLeft: "auto",
-            backgroundColor: "#007bff",
-            color: "white",
-            padding: "8px 16px",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          + Add Record
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto" }}>
+          <button
+            onClick={() => {
+              setForm({
+                year: "",
+                single: "",
+                married: "",
+                widower: "",
+                separated: "",
+                divorced: "",
+                notReported: "",
+              }); // reset form when opening
+              setShowModal(true);
+            }}
+            style={{
+              backgroundColor: "#007bff",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            + Add Record
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            style={{
+              backgroundColor: "#dc3545",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            Delete All
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -265,6 +296,8 @@ const CivilStatusTable = () => {
           </tbody>
         </table>
       </div>
+
+      {displayedData.length === 0 && <div style={{ height: '400px' }} />}
 
       {/* --- Add Modal --- */}
       {showModal && (
@@ -349,6 +382,28 @@ const CivilStatusTable = () => {
               </button>
               <button
                 onClick={() => setShowEditModal(false)}
+                className="cancel-btn"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteAllModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Delete All Civil Status Records</h3>
+            <p style={{ margin: "10px 0 20px" }}>
+              Are you sure you want to delete all civil status records? This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button onClick={handleConfirmDeleteAll} className="save-btn">
+                Yes, Delete All
+              </button>
+              <button
+                onClick={() => setShowDeleteAllModal(false)}
                 className="cancel-btn"
               >
                 Cancel

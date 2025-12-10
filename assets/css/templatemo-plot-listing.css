@@ -2250,21 +2250,23 @@ responsive
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.6); /* changed from dark to light */
+  background: rgba(255, 255, 255, 0.6);
   display: flex;
   justify-content: center;
-  align-items: center;
-  z-index: 1000;
+  align-items: flex-start;
+  padding-top: 40px;
+  z-index: 2000;
 }
 
 .modal-content {
   background: white;
   padding: 20px;
   border-radius: 10px;
-  width: 500px;
+  width: 520px;
+  max-width: 95%;
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* softer shadow for light mode */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .year-input-container {
@@ -2319,4 +2321,219 @@ responsive
   padding: 8px 16px;
   border-radius: 5px;
   cursor: pointer;
+}
+
+.forecast-panel {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+  margin-bottom: 50px;
+}
+
+/* Section titles */
+.forecast-panel h2 {
+  font-weight: 700;
+  font-size: 26px;
+  margin-bottom: 20px;
+  color: #2c3e50;
+}
+
+/* Control button row */
+.control-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+.control-buttons button {
+  background: #0066ff;
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+.control-buttons button:hover {
+  background: #0051cc;
+  transform: translateY(-2px);
+}
+
+.control-buttons button:disabled {
+  background: #b7c5d6;
+  cursor: not-allowed;
+}
+
+/* Training progress box */
+.training-progress,
+.metrics,
+.training-results,
+.forecast-results,
+.info-box {
+  background: #f8fafc;
+  padding: 18px 20px;
+  border-radius: 10px;
+  border: 1px solid #e8ecf2;
+  margin-bottom: 20px;
+}
+
+.training-progress h3,
+.metrics h3,
+.training-results h3,
+.forecast-results h3,
+.info-box h4 {
+  margin-bottom: 15px;
+  font-weight: 700;
+  color: #34495e;
+}
+
+/* Metric grid */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.metric-item {
+  background: white;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #e1e6ef;
+  text-align: center;
+}
+
+.metric-label {
+  display: block;
+  font-size: 13px;
+  color: #6c7a89;
+}
+
+.metric-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+/* Forecast input section */
+.forecast-controls {
+  margin-top: 25px;
+  margin-bottom: 25px;
+}
+
+.forecast-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.forecast-input input {
+  width: 80px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #d0d4db;
+}
+
+/* Table styling */
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+table thead {
+  background: #e9f0f8;
+}
+
+table th, table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.error-positive {
+  color: #e03c3c;
+  font-weight: 600;
+}
+
+.error-negative {
+  color: #2ecc71;
+  font-weight: 600;
+}
+
+/* Chart card */
+.chart-container {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  margin-top: 20px;
+}
+
+/* Enhanced Info Box */
+.enhanced-info {
+  margin-top: 30px;
+  padding: 25px 30px;
+  background: #ffffff;
+  border-radius: 15px;
+  border: 1px solid #e6e6e6;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+  transition: 0.25s ease;
+}
+
+.enhanced-info:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 25px rgba(0,0,0,0.12);
+}
+
+.info-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.info-icon {
+  font-size: 28px;
+  background: linear-gradient(135deg, #6a5af9, #b36bff);
+  color: white;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.info-list li {
+  padding: 10px 0;
+  font-size: 15px;
+  color: #444;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  border-bottom: 1px dashed #dfdfdf;
+}
+
+.info-list li:last-child {
+  border-bottom: none;
+}
+
+.info-list span {
+  font-weight: 600;
+  color: #333;
+  min-width: 160px;
+  display: inline-block;
 }

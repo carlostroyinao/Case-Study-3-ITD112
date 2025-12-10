@@ -10,6 +10,7 @@ const AgeTable = () => {
   const [selectedColumn, setSelectedColumn] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [editId, setEditId] = useState(null);
 
   const [form, setForm] = useState({
@@ -93,6 +94,22 @@ const AgeTable = () => {
   // --- Delete Record ---
   const handleDelete = async (id) => {
     await deleteAgeGroup(id);
+    fetchData();
+  };
+
+  // --- Delete All Records ---
+  const handleDeleteAll = () => {
+    if (!ageGroups.length) return;
+    setShowDeleteAllModal(true);
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (!ageGroups.length) {
+      setShowDeleteAllModal(false);
+      return;
+    }
+    await Promise.all(ageGroups.map((row) => deleteAgeGroup(row.id)));
+    setShowDeleteAllModal(false);
     fetchData();
   };
 
@@ -223,23 +240,37 @@ const AgeTable = () => {
           </select>
         </div>
         
-        <button
-          onClick={() => {
-            setForm({ year: "", below14: "", "15-19": "", "20-24": "", "25-29": "", "30-34": "", "35-39": "", "40-44": "", "45-49": "", "50-54": "", "55-59": "", "60-64": "", "65-69": "", above70: "", notReported: "" }); // Reset form when opening Add modal
-            setShowModal(true);
-          }}
-          style={{
-            marginLeft: "auto",
-            backgroundColor: "#007bff",
-            color: "white",
-            padding: "8px 16px",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          + Add Record
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto" }}>
+          <button
+            onClick={() => {
+              setForm({ year: "", below14: "", "15-19": "", "20-24": "", "25-29": "", "30-34": "", "35-39": "", "40-44": "", "45-49": "", "50-54": "", "55-59": "", "60-64": "", "65-69": "", above70: "", notReported: "" }); // Reset form when opening Add modal
+              setShowModal(true);
+            }}
+            style={{
+              backgroundColor: "#007bff",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            + Add Record
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            style={{
+              backgroundColor: "#dc3545",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            Delete All
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -291,6 +322,8 @@ const AgeTable = () => {
           </tbody>
         </table>
       </div>
+
+      {displayedData.length === 0 && <div style={{ height: '400px' }} />}
 
       {/* --- Add Modal --- */}
       {showModal && (
@@ -375,6 +408,29 @@ const AgeTable = () => {
               </button>
               <button
                 onClick={() => setShowEditModal(false)}
+                className="cancel-btn"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Delete All Modal --- */}
+      {showDeleteAllModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Delete All Age Records</h3>
+            <p style={{ margin: "10px 0 20px" }}>
+              Are you sure you want to delete all age records? This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button onClick={handleConfirmDeleteAll} className="save-btn">
+                Yes, Delete All
+              </button>
+              <button
+                onClick={() => setShowDeleteAllModal(false)}
                 className="cancel-btn"
               >
                 Cancel

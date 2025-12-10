@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import AgeTable from "../components/dashboard/AgeDashboard";
-import SexTable from "../components/dashboard/SexDashboard";
-import CivilStatusTable from "../components/dashboard/CivilStatusDashboard";
-import EducationLevelTable from "../components/dashboard/EducationLevelDashboard";
-import OccupationTable from "../components/dashboard/OccupationDashboard";
-import OriginTable from "../components/dashboard/OriginDashboard";
-import MajorCountryTable from "../components/dashboard/MajorCountryDashboard";
-import AllCountriesTable from "../components/dashboard/AllCountriesDashboard";
+import AgeDashboard from "../components/dashboard/AgeDashboard";
+import SexDashboard from "../components/dashboard/SexDashboard";
+import CivilStatusDashboard from "../components/dashboard/CivilStatusDashboard";
+import EducationLevelDashboard from "../components/dashboard/EducationLevelDashboard";
+import OccupationDashboard from "../components/dashboard/OccupationDashboard";
+import OriginDashboard from "../components/dashboard/OriginDashboard";
+import MajorCountryDashboard from "../components/dashboard/MajorCountryDashboard";
+import AllCountriesDashboard from "../components/dashboard/AllCountriesDashboard";
 
 const Dashboard = () => {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -67,14 +67,14 @@ const Dashboard = () => {
   ];
 
   const categoryTables = [
-    <AgeTable />,
-    <SexTable />,
-    <CivilStatusTable />,
-    <EducationLevelTable />,
-    <OccupationTable />,
-    <OriginTable />,
-    <MajorCountryTable />,
-    <AllCountriesTable />,
+    <AgeDashboard />,
+    <SexDashboard />,
+    <CivilStatusDashboard />,
+    <EducationLevelDashboard />,
+    <OccupationDashboard />,
+    <OriginDashboard />,
+    <MajorCountryDashboard />,
+    <AllCountriesDashboard />,
   ];
 
   return (

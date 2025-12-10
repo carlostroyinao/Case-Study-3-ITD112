@@ -45,8 +45,13 @@ const OriginDashboard = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const data = await getOriginGroups();
-      setOriginGroups(data);
+      try {
+        const data = await getOriginGroups();
+        console.log("OriginDashboard data:", data);
+        setOriginGroups(data);
+      } catch (error) {
+        console.error("Error fetching origin data:", error);
+      }
     };
     fetchData();
   }, []);

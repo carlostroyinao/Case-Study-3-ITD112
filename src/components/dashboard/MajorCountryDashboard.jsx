@@ -51,6 +51,7 @@ const MajorCountryDashboard = () => {
     const fetchData = async () => {
       try {
         const data = await getMajorCountryGroups();
+        console.log("MajorCountryDashboard data:", data);
         setMajorCountryGroups(data);
       } catch (err) {
         console.error("Error fetching data:", err);

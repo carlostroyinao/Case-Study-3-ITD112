@@ -30,6 +30,7 @@ const OriginTable = () => {
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [editId, setEditId] = useState(null);
 
   const placeholders = {
@@ -94,6 +95,22 @@ const OriginTable = () => {
 
   const handleDelete = async (id) => {
     await deleteOriginGroup(id);
+    fetchData();
+  };
+
+  // --- Delete All Records ---
+  const handleDeleteAll = () => {
+    if (!originGroups.length) return;
+    setShowDeleteAllModal(true);
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (!originGroups.length) {
+      setShowDeleteAllModal(false);
+      return;
+    }
+    await Promise.all(originGroups.map((row) => deleteOriginGroup(row.id)));
+    setShowDeleteAllModal(false);
     fetchData();
   };
 
@@ -175,24 +192,38 @@ const OriginTable = () => {
           </select>
         </div>
 
-        <button
-          onClick={() => {
-            setForm(Object.fromEntries(Object.keys(form).map((k) => [k, ""])));
-            setEditId(null);
-            setShowModal(true);
-          }}
-          style={{
-            marginLeft: "auto",
-            backgroundColor: "#007bff",
-            color: "white",
-            padding: "8px 16px",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          + Add Record
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto" }}>
+          <button
+            onClick={() => {
+              setForm(Object.fromEntries(Object.keys(form).map((k) => [k, ""])));
+              setEditId(null);
+              setShowModal(true);
+            }}
+            style={{
+              backgroundColor: "#007bff",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            + Add Record
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            style={{
+              backgroundColor: "#dc3545",
+              color: "white",
+              padding: "8px 16px",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            Delete All
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -250,6 +281,8 @@ const OriginTable = () => {
         </table>
       </div>
 
+      {filteredData.length === 0 && <div style={{ height: '400px' }} />}
+
       {/* Modal */}
       {showModal && (
         <div className="modal-overlay">
@@ -287,6 +320,28 @@ const OriginTable = () => {
               </button>
               <button
                 onClick={() => setShowModal(false)}
+                className="cancel-btn"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteAllModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Delete All Region Records</h3>
+            <p style={{ margin: "10px 0 20px" }}>
+              Are you sure you want to delete all region records? This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button onClick={handleConfirmDeleteAll} className="save-btn">
+                Yes, Delete All
+              </button>
+              <button
+                onClick={() => setShowDeleteAllModal(false)}
                 className="cancel-btn"
               >
                 Cancel

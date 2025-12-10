@@ -19,7 +19,7 @@ const Home = () => {
                 <li>
                   <Link to="/data" onClick={() => window.scrollTo(0, 0)}>
                     <span className="icon">
-                      <img src="assets/images/data-icon.png" alt="Home" />
+                      <img src="assets/images/data-icon.png" alt="Data" />
                     </span>
                     Data
                   </Link>
@@ -27,7 +27,7 @@ const Home = () => {
                 <li>
                   <Link to="/import" onClick={() => window.scrollTo(0, 0)}>
                     <span className="icon">
-                      <img src="assets/images/import-icon.png" alt="Food" />
+                      <img src="assets/images/import-icon.png" alt="Import" />
                     </span>
                     Import
                   </Link>
@@ -35,9 +35,17 @@ const Home = () => {
                 <li>
                   <Link to="/dashboard" onClick={() => window.scrollTo(0, 0)}>
                     <span className="icon">
-                      <img src="assets/images/dashboard-icon.png" alt="Food" />
+                      <img src="assets/images/dashboard-icon.png" alt="Dashboard" />
                     </span>
                     Dashboard
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/forecasting" onClick={() => window.scrollTo(0, 0)}>
+                    <span className="icon">
+                      <img src="assets/images/forecasting-icon.png" alt="Forecasting" />
+                    </span>
+                    Forecasting
                   </Link>
                 </li>
               </ul>

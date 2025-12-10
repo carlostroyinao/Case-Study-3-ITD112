@@ -95,8 +95,13 @@ const OccupationDashboard = () => {
   // Fetch data
   useEffect(() => {
     const fetchData = async () => {
-      const data = await getOccupationGroups();
-      setOccupationGroups(data);
+      try {
+        const data = await getOccupationGroups();
+        console.log("OccupationDashboard data:", data);
+        setOccupationGroups(data);
+      } catch (error) {
+        console.error("Error fetching occupation data:", error);
+      }
     };
     fetchData();
   }, []);

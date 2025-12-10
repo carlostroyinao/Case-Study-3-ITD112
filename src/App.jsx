@@ -6,6 +6,7 @@ import Home from "./pages/Home";
 import Data from "./pages/Data";
 import Import from "./pages/Import";
 import Dashboard from "./pages/Dashboard";
+import Forecasting from "./pages/Forecasting";
 
 // CSS imports
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -23,6 +24,7 @@ function App() {
         <Route path="/data" element={<Data />} />
         <Route path="/import" element={<Import />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/forecasting" element={<Forecasting />} />
       </Routes>
       <Footer />
     </Router>

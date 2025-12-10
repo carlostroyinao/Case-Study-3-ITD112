@@ -32,7 +32,11 @@ const Header = () => {
                     Dashboard
                   </Link>
                 </li>
-
+                <li>
+                  <Link to="/forecasting" className={location.pathname === "/forecasting" ? "active" : ""}>
+                    Forecasting
+                  </Link>
+                </li>
               </ul>
               <a className="menu-trigger">
                 <span>Menu</span>
