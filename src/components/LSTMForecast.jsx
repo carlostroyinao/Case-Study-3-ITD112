@@ -1,396 +1,165 @@
-import React, { useState, useRef } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { cleanData, sortData, normalizeData, denormalize, createSequences, calculateMetrics } from '../utils/dataPreparation';
-import { buildLSTMModel, trainLSTMModel, predictLSTM, saveLSTMModel, loadLSTMModel, deleteLSTMModel, downloadLSTMModel } from '../models/lstmModel';
+import React, { useState } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
+import {
+  cleanSexData,
+  sortData,
+  normalizeSexData,
+  denormalize,
+  createSexSequences,
+  calculateSexMetrics
+} from '../utils/dataPreparation';
+import {
+  buildSexLSTMModel,
+  trainSexLSTMModel,
+  predictSexLSTM,
+  saveSexLSTMModel,
+  loadSexLSTMModel,
+  deleteSexLSTMModel,
+  downloadSexLSTMModel,
+  uploadSexLSTMModel
+} from '../models/lstmModel';
 import './ForecastPanel.css';
 
-export default function LSTMForecast({ data }) {
+export default function SexLSTM({ data }) {
   const [isTraining, setIsTraining] = useState(false);
   const [trainingProgress, setTrainingProgress] = useState(null);
-
-  // Total model (for metrics display)
-  const [metrics, setMetrics] = useState(null);
+  const [metrics, setMetrics] = useState({ male: null, female: null });
   const [model, setModel] = useState(null);
   const [metadata, setMetadata] = useState(null);
-  const [validationResults, setValidationResults] = useState([]);
-
-  // Separate male/female models
-  const [maleModel, setMaleModel] = useState(null);
-  const [femaleModel, setFemaleModel] = useState(null);
-  const [maleMetadata, setMaleMetadata] = useState(null);
-  const [femaleMetadata, setFemaleMetadata] = useState(null);
-
   const [forecastYears, setForecastYears] = useState(5);
   const [forecasts, setForecasts] = useState([]);
+  const [validationResults, setValidationResults] = useState([]);
 
-  const LOOKBACK = 6;
-  const FEATURES = ['emigrants'];
-  const TARGET = 'emigrants';
+  const LOOKBACK = 3;
+  const FEATURES = ['male', 'female'];
+  const TARGETS = ['male', 'female'];
 
-  // --- Detect male/female columns (case-insensitive) ---
-  const getMaleFemaleKeys = () => {
-    if (!data || data.length === 0) return null;
-    const row = data[0];
-    const keys = Object.keys(row);
-    const maleKey = keys.find(k => /^male$/i.test(k));
-    const femaleKey = keys.find(k => /^female$/i.test(k));
-    return maleKey && femaleKey ? { maleKey, femaleKey } : null;
-  };
-
-  const maleFemaleKeys = getMaleFemaleKeys();
-  const hasMaleFemaleColumns = !!maleFemaleKeys;
-
-  // --- Shared forecast generator (used by Train + Load + Generate buttons) ---
-  const generateForecasts = async (
-    maleModelArg,
-    femaleModelArg,
-    maleMetaArg,
-    femaleMetaArg,
-    years
-  ) => {
-    if (!maleModelArg || !femaleModelArg || !maleMetaArg || !femaleMetaArg) return [];
-
-    const maleForecast = [];
-    const femaleForecast = [];
-
-    // --- male series ---
-    {
-      const { mins, maxs, lastData, lastYear } = maleMetaArg;
-      let currentSequence = lastData.map(row => ({
-        year: row.year,
-        emigrants: row.emigrants
-      }));
-      let currentYear = lastYear;
-
-      for (let i = 0; i < years; i++) {
-        const normalized = currentSequence.map(row => ({
-          emigrants:
-            (row.emigrants - mins.emigrants) /
-            (maxs.emigrants - mins.emigrants)
-        }));
-        const input = [normalized.map(r => FEATURES.map(f => r[f]))];
-
-        // eslint-disable-next-line no-await-in-loop
-        const normalizedPred = await predictLSTM(maleModelArg, input);
-        const predictedEmigrants = denormalize(
-          normalizedPred[0],
-          mins[TARGET],
-          maxs[TARGET]
-        );
-
-        currentYear++;
-        maleForecast.push({
-          year: currentYear,
-          emigrants: predictedEmigrants
-        });
-
-        currentSequence = [
-          ...currentSequence.slice(1),
-          { year: currentYear, emigrants: predictedEmigrants }
-        ];
-      }
-    }
-
-    // --- female series ---
-    {
-      const { mins, maxs, lastData, lastYear } = femaleMetaArg;
-      let currentSequence = lastData.map(row => ({
-        year: row.year,
-        emigrants: row.emigrants
-      }));
-      let currentYear = lastYear;
-
-      for (let i = 0; i < years; i++) {
-        const normalized = currentSequence.map(row => ({
-          emigrants:
-            (row.emigrants - mins.emigrants) /
-            (maxs.emigrants - mins.emigrants)
-        }));
-        const input = [normalized.map(r => FEATURES.map(f => r[f]))];
-
-        // eslint-disable-next-line no-await-in-loop
-        const normalizedPred = await predictLSTM(femaleModelArg, input);
-        const predictedEmigrants = denormalize(
-          normalizedPred[0],
-          mins[TARGET],
-          maxs[TARGET]
-        );
-
-        currentYear++;
-        femaleForecast.push({
-          year: currentYear,
-          emigrants: predictedEmigrants
-        });
-
-        currentSequence = [
-          ...currentSequence.slice(1),
-          { year: currentYear, emigrants: predictedEmigrants }
-        ];
-      }
-    }
-
-    // --- combine male + female into one table/series ---
-    const combined = [];
-    for (let i = 0; i < years; i++) {
-      const year = maleForecast[i]?.year || femaleForecast[i]?.year;
-      const male = maleForecast[i]?.emigrants || 0;
-      const female = femaleForecast[i]?.emigrants || 0;
-      const total = male + female;
-
-      combined.push({
-        year: year?.toString(),
-        male: Math.round(male),
-        female: Math.round(female),
-        total: Math.round(total),
-        isForecast: true
-      });
-    }
-
-    return combined;
-  };
-
-  // Fallback: generate total-only forecast using the total model + metadata
-  const generateTotalForecast = async (totalModelArg, totalMetaArg, years) => {
-    if (!totalModelArg || !totalMetaArg) return [];
-    const { mins, maxs, lastData, lastYear } = totalMetaArg;
-    if (!mins || !maxs || !lastData || !lastYear) return [];
-
-    let currentSequence = lastData.map(row => ({ year: row.year, emigrants: row.emigrants }));
-    let currentYear = lastYear;
-    const totalForecast = [];
-
-    for (let i = 0; i < years; i++) {
-      const normalized = currentSequence.map(row => ({ emigrants: (row.emigrants - mins.emigrants) / (maxs.emigrants - mins.emigrants) }));
-      const input = [normalized.map(r => FEATURES.map(f => r[f]))];
-      // eslint-disable-next-line no-await-in-loop
-      const normalizedPred = await predictLSTM(totalModelArg, input);
-      const predicted = denormalize(normalizedPred[0], mins[TARGET], maxs[TARGET]);
-
-      currentYear++;
-      totalForecast.push({ year: currentYear, total: Math.round(predicted), isForecast: true });
-
-      currentSequence = [...currentSequence.slice(1), { year: currentYear, emigrants: predicted }];
-    }
-
-    return totalForecast;
-  };
-
-  // --- TRAIN: total + male + female (and save all 3) ---
   const handleTrain = async () => {
-    if (!maleFemaleKeys) {
-      const availableColumns =
-        data && data.length > 0
-          ? Object.keys(data[0]).join(', ')
-          : 'No data loaded';
-      alert(
-        `No male/female columns detected.\n\nAvailable columns: ${availableColumns}\n\nPlease ensure your data has "Male" and "Female" columns.`
-      );
-      return;
-    }
-
-    const { maleKey, femaleKey } = maleFemaleKeys;
-
-    let maleModelLocal = null;
-    let femaleModelLocal = null;
-    let maleMetadataLocal = null;
-    let femaleMetadataLocal = null;
-    let totalValidation = [];
-
     setIsTraining(true);
     setTrainingProgress({ epoch: 0, loss: 0, mae: 0 });
-    setMetrics(null);
+    setMetrics({ male: null, female: null });
     setValidationResults([]);
     setForecasts([]);
 
     try {
-      // ----- 1) TOTAL model (male + female) with metrics + validation -----
-      const totalSeries = data.map(row => ({
-        year: row.year,
-        emigrants: (Number(row[maleKey]) || 0) + (Number(row[femaleKey]) || 0)
-      }));
+      console.log('Starting LSTM training with data:', data.length, 'records');
 
-      let cleanedTotal = cleanData(totalSeries);
-      cleanedTotal = sortData(cleanedTotal);
+      // 1. Data Preparation
+      let cleanedData = cleanSexData(data);
+      cleanedData = sortData(cleanedData);
 
-      const {
-        normalized: normTotal,
-        mins: minsTotal,
-        maxs: maxsTotal
-      } = normalizeData(cleanedTotal, FEATURES);
-      const { X: Xtotal, y: yTotal } = createSequences(
-        normTotal,
-        LOOKBACK,
-        FEATURES,
-        TARGET
-      );
+      console.log('Cleaned data:', cleanedData);
 
-      if (
-        !Array.isArray(Xtotal) ||
-        Xtotal.length === 0 ||
-        !Array.isArray(yTotal) ||
-        yTotal.length === 0
-      ) {
-        alert(
-          `Not enough data to train LSTM model (total). Data points: ${cleanedTotal.length}. Lookback: ${LOOKBACK}.`
+      if (cleanedData.length < LOOKBACK + 5) {
+        throw new Error(
+          `Not enough data for training. Need at least ${LOOKBACK + 5} records, but have ${cleanedData.length}.`
         );
-        setIsTraining(false);
-        return;
       }
 
-      const totalModel = buildLSTMModel(LOOKBACK, FEATURES.length);
+      // 2. Normalization
+      const { normalized, mins, maxs } = normalizeSexData(cleanedData, FEATURES);
+      console.log('Normalization mins/maxs:', { mins, maxs });
 
+      // 3. Create sequences
+      const { X, y } = createSexSequences(normalized, LOOKBACK, FEATURES, TARGETS);
+
+      if (X.length === 0 || y.length === 0) {
+        throw new Error('Could not create training sequences. Check data format.');
+      }
+
+      // 4. Build model
+      const newModel = buildSexLSTMModel(LOOKBACK, FEATURES.length);
+
+      // 5. Train model
       const onEpochEnd = (epoch, logs) => {
         setTrainingProgress({
           epoch: epoch + 1,
-          loss: logs.loss.toFixed(6),
-          mae: logs.mae.toFixed(6),
+          loss: logs.loss?.toFixed(6) || '0.000000',
+          mae: logs.mae?.toFixed(6) || '0.000000',
           val_loss: logs.val_loss?.toFixed(6),
           val_mae: logs.val_mae?.toFixed(6)
         });
       };
 
-      await trainLSTMModel(totalModel, Xtotal, yTotal, onEpochEnd, 100, 0.2);
+      await trainSexLSTMModel(newModel, X, y, onEpochEnd, 100, 0.2);
 
-      const normTotalPreds = await predictLSTM(totalModel, Xtotal);
+      // 6. Make predictions (normalized)
+      const normalizedPredictions = await predictSexLSTM(newModel, X);
 
-      const totalPredictions = normTotalPreds.map(pred =>
-        denormalize(pred, minsTotal[TARGET], maxsTotal[TARGET])
-      );
-      const totalActual = yTotal.map(val =>
-        denormalize(val, minsTotal[TARGET], maxsTotal[TARGET])
-      );
+      // 7. Denormalize predictions for each target
+      const predictions = normalizedPredictions.map(pred => ({
+        male: denormalize(pred[0], mins.male, maxs.male),
+        female: denormalize(pred[1], mins.female, maxs.female)
+      }));
 
-      // total-series validation (last 20%)
-      const trainSizeTotal = Math.floor(totalActual.length * 0.8);
-      totalValidation = totalActual.slice(trainSizeTotal).map(
-        (actual, index) => ({
-          year: cleanedTotal[trainSizeTotal + index + LOOKBACK].year,
-          actual: Math.round(actual),
-          predicted: Math.round(totalPredictions[trainSizeTotal + index]),
-          error: Math.round(
-            totalPredictions[trainSizeTotal + index] - actual
-          )
-        })
-      );
-      setValidationResults(totalValidation);
+      // 8. Calculate actual values
+      const actualValues = y.map(val => ({
+        male: denormalize(val[0], mins.male, maxs.male),
+        female: denormalize(val[1], mins.female, maxs.female)
+      }));
 
-      const totalMetrics = calculateMetrics(totalActual, totalPredictions);
-      setMetrics(totalMetrics);
+      // 9. Create validation results (last 20%)
+      const trainSize = Math.floor(actualValues.length * 0.8);
+      const resultsData = actualValues.slice(trainSize).map((actual, index) => ({
+        year: cleanedData[trainSize + index + LOOKBACK].year,
+        actualMale: Math.round(actual.male),
+        predictedMale: Math.round(predictions[trainSize + index].male),
+        errorMale: Math.round(
+          predictions[trainSize + index].male - actual.male
+        ),
+        actualFemale: Math.round(actual.female),
+        predictedFemale: Math.round(predictions[trainSize + index].female),
+        errorFemale: Math.round(
+          predictions[trainSize + index].female - actual.female
+        )
+      }));
+      setValidationResults(resultsData);
 
-      const totalMetadata = {
+      // 10. Calculate metrics on ALL data (training + validation)
+      const maleActual = actualValues.map(v => v.male);
+      const malePred = predictions.map(p => p.male);
+      const maleMetrics = calculateSexMetrics(maleActual, malePred);
+
+      const femaleActual = actualValues.map(v => v.female);
+      const femalePred = predictions.map(p => p.female);
+      const femaleMetrics = calculateSexMetrics(femaleActual, femalePred);
+
+      setMetrics({
+        male: maleMetrics,
+        female: femaleMetrics
+      });
+
+      // 11. Save metadata
+      const newMetadata = {
         modelType: 'LSTM',
         lookback: LOOKBACK,
         features: FEATURES,
-        target: TARGET,
-        mins: minsTotal,
-        maxs: maxsTotal,
-        lastYear: cleanedTotal[cleanedTotal.length - 1].year,
-        lastData: cleanedTotal.slice(-LOOKBACK),
-        metrics: totalMetrics,
-        validationResults: totalValidation,
+        targets: TARGETS,
+        mins,
+        maxs,
+        lastYear: cleanedData[cleanedData.length - 1].year,
+        lastData: cleanedData.slice(-LOOKBACK),
+        metrics: { male: maleMetrics, female: femaleMetrics },
         trainedAt: new Date().toISOString()
       };
 
-      setModel(totalModel);
-      setMetadata(totalMetadata);
+      // 12. Save model
+      await saveSexLSTMModel(newModel, newMetadata);
 
-      // ----- 2) MALE model -----
-      const maleSeries = data.map(row => ({
-        year: row.year,
-        emigrants: Number(row[maleKey]) || 0
-      }));
-
-      let cleanedMale = cleanData(maleSeries);
-      cleanedMale = sortData(cleanedMale);
-
-      const {
-        normalized: normMale,
-        mins: minsMale,
-        maxs: maxsMale
-      } = normalizeData(cleanedMale, FEATURES);
-      const { X: Xmale, y: yMale } = createSequences(
-        normMale,
-        LOOKBACK,
-        FEATURES,
-        TARGET
-      );
-
-      if (Array.isArray(Xmale) && Xmale.length > 0) {
-        maleModelLocal = buildLSTMModel(LOOKBACK, FEATURES.length);
-        await trainLSTMModel(maleModelLocal, Xmale, yMale, null, 80, 0.2);
-
-        maleMetadataLocal = {
-          mins: minsMale,
-          maxs: maxsMale,
-          lastYear: cleanedMale[cleanedMale.length - 1].year,
-          lastData: cleanedMale.slice(-LOOKBACK)
-        };
-
-        setMaleModel(maleModelLocal);
-        setMaleMetadata(maleMetadataLocal);
-      } else {
-        console.info('Skipping male model training: not enough data.');
-      }
-
-      // ----- 3) FEMALE model -----
-      const femaleSeries = data.map(row => ({
-        year: row.year,
-        emigrants: Number(row[femaleKey]) || 0
-      }));
-
-      let cleanedFemale = cleanData(femaleSeries);
-      cleanedFemale = sortData(cleanedFemale);
-
-      const {
-        normalized: normFemale,
-        mins: minsFemale,
-        maxs: maxsFemale
-      } = normalizeData(cleanedFemale, FEATURES);
-      const { X: Xfemale, y: yFemale } = createSequences(
-        normFemale,
-        LOOKBACK,
-        FEATURES,
-        TARGET
-      );
-
-      if (Array.isArray(Xfemale) && Xfemale.length > 0) {
-        const femaleModelLocalTemp = buildLSTMModel(LOOKBACK, FEATURES.length);
-        await trainLSTMModel(
-          femaleModelLocalTemp,
-          Xfemale,
-          yFemale,
-          null,
-          80,
-          0.2
-        );
-
-        femaleMetadataLocal = {
-          mins: minsFemale,
-          maxs: maxsFemale,
-          lastYear: cleanedFemale[cleanedFemale.length - 1].year,
-          lastData: cleanedFemale.slice(-LOOKBACK)
-        };
-
-        setFemaleModel(femaleModelLocalTemp);
-        setFemaleMetadata(femaleMetadataLocal);
-        femaleModelLocal = femaleModelLocalTemp;
-      } else {
-        console.info('Skipping female model training: not enough data.');
-      }
-
-      // ----- Save all 3 models in one place (like MLP) -----
-      await saveLSTMModel(
-        totalModel,
-        totalMetadata,
-        maleModelLocal,
-        maleMetadataLocal,
-        femaleModelLocal,
-        femaleMetadataLocal
-      );
+      setModel(newModel);
+      setMetadata(newMetadata);
 
       alert(
-        `LSTM total model trained successfully!\nMAE: ${totalMetrics.mae}\nAccuracy: ${totalMetrics.accuracy}%\nMale/Female models trained for forecasting.`
+        `LSTM model trained successfully!\nMale Accuracy: ${maleMetrics.accuracy}%\nFemale Accuracy: ${femaleMetrics.accuracy}%`
       );
     } catch (error) {
       console.error('Training error:', error);
@@ -400,47 +169,55 @@ export default function LSTMForecast({ data }) {
     }
   };
 
+  const handleUploadModel = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.multiple = false;
+
+      input.onchange = async e => {
+        try {
+          setIsTraining(true);
+
+          const file = e.target.files[0];
+
+          if (!file) {
+            return;
+          }
+
+          const result = await uploadSexLSTMModel([file]);
+
+          setModel(result.model);
+          setMetadata(result.metadata);
+          setMetrics(result.metadata.metrics || { male: null, female: null });
+          setForecasts([]);
+          setValidationResults([]);
+
+          alert('LSTM model uploaded successfully!');
+        } catch (err) {
+          alert('Error uploading model: ' + err.message);
+        } finally {
+          setIsTraining(false);
+        }
+      };
+
+      input.click();
+    } catch (err) {
+      alert('Upload error: ' + err.message);
+    }
+  };
+
   const handleLoadModel = async () => {
     try {
-      const result = await loadLSTMModel();
+      const result = await loadSexLSTMModel();
       if (result) {
         setModel(result.model);
         setMetadata(result.metadata);
-        setMetrics(result.metadata?.metrics || null);
-        setValidationResults(result.metadata?.validationResults || []);
-        setMaleModel(result.maleModel || null);
-        setFemaleModel(result.femaleModel || null);
-        setMaleMetadata(result.maleMetadata || null);
-        setFemaleMetadata(result.femaleMetadata || null);
-        setIsTraining(false);
-        // Auto-generate forecasts if male/female models present
-        if (
-          result.maleModel &&
-          result.femaleModel &&
-          result.maleMetadata &&
-          result.femaleMetadata
-        ) {
-          const combined = await generateForecasts(
-            result.maleModel,
-            result.femaleModel,
-            result.maleMetadata,
-            result.femaleMetadata,
-            forecastYears
-          );
-          setForecasts(combined);
-          alert('LSTM model loaded successfully! Forecast generated.');
-        } else if (result.model && result.metadata) {
-          // If male/female not present but total model + metadata exist, generate total-only forecast
-          console.info('Male/female models or metadata missing; generating total-only forecast.');
-          const totalForecast = await generateTotalForecast(result.model, result.metadata, forecastYears);
-          setForecasts(totalForecast.map(f => ({ year: f.year, total: f.total, male: null, female: null, isForecast: true })));
-          alert('LSTM total model loaded. Generated total-only forecast.');
-        } else {
-          setForecasts([]);
-          alert('LSTM model loaded successfully! (no forecast generated — male/female models or metadata missing)');
-        }
+        setMetrics(result.metadata.metrics || { male: null, female: null });
+        alert('LSTM model loaded successfully!');
       } else {
-        alert('No saved model found. Please train a model first.');
+        alert('No saved LSTM model found. Please train a model first.');
       }
     } catch (error) {
       console.error('Error loading model:', error);
@@ -452,16 +229,12 @@ export default function LSTMForecast({ data }) {
     if (!confirm('Are you sure you want to delete the saved LSTM model?')) return;
 
     try {
-      await deleteLSTMModel();
+      await deleteSexLSTMModel();
       setModel(null);
       setMetadata(null);
-      setMetrics(null);
-      setValidationResults([]);
+      setMetrics({ male: null, female: null });
       setForecasts([]);
-      setMaleModel(null);
-      setFemaleModel(null);
-      setMaleMetadata(null);
-      setFemaleMetadata(null);
+      setValidationResults([]);
       alert('LSTM model deleted successfully!');
     } catch (error) {
       console.error('Error deleting model:', error);
@@ -476,7 +249,7 @@ export default function LSTMForecast({ data }) {
     }
 
     try {
-      await downloadLSTMModel(model, metadata);
+      await downloadSexLSTMModel(model, metadata);
       alert('LSTM model files downloaded!');
     } catch (error) {
       console.error('Error downloading model:', error);
@@ -484,248 +257,300 @@ export default function LSTMForecast({ data }) {
     }
   };
 
-  // --- UPLOAD: load model files from user and save into IndexedDB ---
-  const fileInputRef = useRef(null);
-
-  const handleUploadClick = () => {
-    if (fileInputRef.current) fileInputRef.current.click();
-  };
-
-  const handleUploadFiles = async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    try {
-      // Convert FileList -> Array
-      const filesArr = Array.from(files);
-
-      // Find all model.json files (could be total, male, female) and load/save each
-      const modelJsonFiles = [];
-      for (const f of filesArr) {
-        if (f.name && f.name.toLowerCase().endsWith('.json')) {
-          try {
-            const txt = await f.text();
-            const parsed = JSON.parse(txt);
-            if (parsed && parsed.weightsManifest) {
-              modelJsonFiles.push({ file: f, manifest: parsed });
-            }
-          } catch (err) {
-            // ignore
-          }
-        }
-      }
-
-      if (modelJsonFiles.length === 0) {
-        throw new Error('No valid model.json found among uploaded files. Please include at least one model.json that references the weight shard files.');
-      }
-
-      // Helper to match manifest paths to uploaded Files
-      const matchFilesForManifest = (manifest) => {
-        const expected = (manifest.weightsManifest || []).flatMap(wm => wm.paths || []);
-        const ordered = [];
-        const missing = [];
-        for (const p of expected) {
-          const normalized = p.replace(/^\.\/+/, '');
-          const basename = normalized.split('/').pop();
-          const match = filesArr.find(f => f.name === p) || filesArr.find(f => f.name === normalized) || filesArr.find(f => f.name === basename) || filesArr.find(f => f.name.endsWith(basename));
-          if (match) ordered.push(match);
-          else missing.push(p);
-        }
-        return { ordered, missing };
-      };
-
-      // Process each model.json uploaded
-      for (const entry of modelJsonFiles) {
-        const modelJsonFile = entry.file;
-        const manifestObjLocal = entry.manifest;
-
-        const { ordered, missing } = matchFilesForManifest(manifestObjLocal);
-        if (missing.length > 0) {
-          const available = filesArr.map(f => f.name).join(', ');
-          throw new Error(`Missing weight files referenced by ${modelJsonFile.name}: ${missing.join(', ')}. Uploaded files: ${available}`);
-        }
-
-        const filesForLoad = [modelJsonFile, ...ordered];
-        const loadedModel = await tf.loadLayersModel(tf.io.browserFiles(filesForLoad));
-
-        // Decide save key by filename hints
-        const lower = modelJsonFile.name.toLowerCase();
-        let saveKey = 'indexeddb://emigrants-lstm-model-total';
-        let storageMetaKey = 'lstm-metadata-total';
-        if (lower.includes('male')) {
-          saveKey = 'indexeddb://emigrants-lstm-model-male';
-          storageMetaKey = 'lstm-metadata-male';
-        } else if (lower.includes('female')) {
-          saveKey = 'indexeddb://emigrants-lstm-model-female';
-          storageMetaKey = 'lstm-metadata-female';
-        }
-
-        await loadedModel.save(saveKey);
-
-        // Try to locate matching metadata file (same basename or contains male/female/meta)
-        const base = modelJsonFile.name.replace(/\.json$/i, '');
-        const metaCandidates = filesArr.filter(f => /meta/i.test(f.name) || /metadata/i.test(f.name));
-        let matchedMeta = metaCandidates.find(f => f.name.toLowerCase().includes(base.toLowerCase()));
-        if (!matchedMeta) {
-          matchedMeta = metaCandidates.find(f => saveKey.includes('male') && /male/i.test(f.name)) || metaCandidates.find(f => saveKey.includes('female') && /female/i.test(f.name)) || metaCandidates.find(f => /lstm.*meta/i.test(f.name)) || metaCandidates[0];
-        }
-
-        if (matchedMeta) {
-          try {
-            const txt = await matchedMeta.text();
-            const metadataObj = JSON.parse(txt);
-            localStorage.setItem(storageMetaKey, JSON.stringify(metadataObj));
-          } catch (err) {
-            console.warn('Uploaded metadata not valid JSON for', modelJsonFile.name, err);
-          }
-        }
-      }
-
-      alert('Model uploaded and saved to IndexedDB. Loading model...');
-      // After saving, load into component state via existing loader
-      await handleLoadModel();
-    } catch (err) {
-      console.error('Upload error:', err);
-      alert('Failed to upload model: ' + (err.message || err));
-    } finally {
-      // reset input so uploading same files again triggers change
-      e.target.value = null;
-    }
-  };
-
-  // --- Manual forecast (button) using existing male/female models ---
   const handleForecast = async () => {
-    if (!maleModel || !femaleModel || !maleMetadata || !femaleMetadata) {
-      alert(
-        'Please train/load the LSTM models first so male/female forecasts are available.'
-      );
+    if (!model || !metadata) {
+      alert('Please train or load a model first.');
       return;
     }
 
     try {
-      const combined = await generateForecasts(
-        maleModel,
-        femaleModel,
-        maleMetadata,
-        femaleMetadata,
-        forecastYears
-      );
-      setForecasts(combined);
-      alert(
-        `Generated ${forecastYears}-year LSTM forecast for male, female, and total.`
-      );
+      setIsTraining(true);
+      const { mins, maxs, lastData } = metadata;
+
+      if (!lastData || lastData.length === 0) {
+        throw new Error(
+          'Model metadata is missing historical data needed for forecasting.'
+        );
+      }
+
+      let currentSequence = lastData.map(row => ({
+        year: row.year || metadata.lastYear - lastData.length + 1,
+        male: row.male || 0,
+        female: row.female || 0
+      }));
+
+      const predictions = [];
+      let currentYear = metadata.lastYear;
+
+      for (let i = 0; i < forecastYears; i++) {
+        const normalized = currentSequence.map(row => ({
+          male:
+            (row.male - (mins?.male || 0)) /
+            (((maxs?.male || 1) - (mins?.male || 0)) || 1),
+          female:
+            (row.female - (mins?.female || 0)) /
+            (((maxs?.female || 1) - (mins?.female || 0)) || 1)
+        }));
+
+        const input = [normalized.map(row => FEATURES.map(f => row[f]))];
+
+        // eslint-disable-next-line no-await-in-loop
+        const normalizedPred = await predictSexLSTM(model, input);
+        const predictedMale = denormalize(
+          normalizedPred[0][0],
+          mins?.male || 0,
+          maxs?.male || 1
+        );
+        const predictedFemale = denormalize(
+          normalizedPred[0][1],
+          mins?.female || 0,
+          maxs?.female || 1
+        );
+
+        currentYear++;
+        predictions.push({
+          year: currentYear.toString(),
+          male: Math.round(predictedMale),
+          female: Math.round(predictedFemale),
+          total: Math.round(predictedMale + predictedFemale),
+          isForecast: true
+        });
+
+        currentSequence = [
+          ...currentSequence.slice(1),
+          {
+            year: currentYear,
+            male: predictedMale,
+            female: predictedFemale
+          }
+        ];
+      }
+
+      setForecasts(predictions);
+      alert(`Generated ${forecastYears} year LSTM forecast!`);
     } catch (error) {
       console.error('Forecasting error:', error);
       alert('Error generating forecast: ' + error.message);
+    } finally {
+      setIsTraining(false);
     }
   };
 
-  const chartData = [
-    ...(hasMaleFemaleColumns
-      ? data.map(row => ({
-          year: row.year,
-          male: Number(row.male) || 0,
-          female: Number(row.female) || 0,
-          total:
-            (Number(row.male) || 0) + (Number(row.female) || 0),
-          isForecast: false
-        }))
-      : []),
-    ...forecasts
-  ];
+  // Prepare chart data
+  const historicalData = data.map(d => ({
+    ...d,
+    year: d.year.toString(),
+    yearNum: typeof d.year === 'number' ? d.year : parseInt(d.year, 10) || 0,
+    isForecast: false,
+    total: (d.male || 0) + (d.female || 0)
+  }));
+
+  const forecastData = forecasts.map(f => ({
+    ...f,
+    year: f.year.toString(),
+    yearNum: typeof f.year === 'string' ? parseInt(f.year, 10) || 0 : f.year,
+    isForecast: true
+  }));
+
+  const chartData = [...historicalData, ...forecastData]
+    .sort((a, b) => a.yearNum - b.yearNum)
+    .map(({ yearNum, ...rest }) => rest);
 
   return (
     <div className="forecast-panel lstm-panel">
-    
       {/* Title */}
-      <h2>LSTM Forecasting (Long Short-Term Memory)</h2>
+      <h2>LSTM Forecasting for Sex Data</h2>
+      <p>
+        Predicts <strong>male</strong> and <strong>female</strong> emigrants using a
+        Long Short-Term Memory (LSTM) model.
+      </p>
 
       {/* Buttons */}
       <div className="control-buttons">
         <button onClick={handleTrain} disabled={isTraining}>
           {isTraining ? 'Training...' : 'Train LSTM Model'}
         </button>
-        <button onClick={handleLoadModel} disabled={isTraining}>Load Model</button>
-        <button onClick={handleUploadClick} disabled={isTraining}>Upload Model</button>
-        <button onClick={handleDeleteModel} disabled={isTraining || !model}>Delete Model</button>
-        <button onClick={handleDownloadModel} disabled={isTraining || !model}>Download Model</button>
+        <button onClick={handleLoadModel} disabled={isTraining}>
+          Load Model
+        </button>
+        <button onClick={handleUploadModel} disabled={isTraining}>
+          Upload Model
+        </button>
+        <button onClick={handleDeleteModel} disabled={isTraining || !model}>
+          Delete Model
+        </button>
+        <button onClick={handleDownloadModel} disabled={isTraining || !model}>
+          Download Model
+        </button>
       </div>
-
-      {/* Hidden upload input */}
-      <input
-        type="file"
-        multiple
-        ref={fileInputRef}
-        onChange={handleUploadFiles}
-        style={{ display: 'none' }}
-        accept=".json,.bin"
-      />
 
       {/* TRAINING STATUS */}
       {isTraining && trainingProgress && (
         <div className="training-progress">
           <h3>Training Progress</h3>
-          <p><strong>Epoch:</strong> {trainingProgress.epoch} / 100</p>
-          <p><strong>Loss:</strong> {trainingProgress.loss}</p>
-          <p><strong>MAE:</strong> {trainingProgress.mae}</p>
+          <p>
+            <strong>Epoch:</strong> {trainingProgress.epoch} / 100
+          </p>
+          <p>
+            <strong>Loss:</strong> {trainingProgress.loss}
+          </p>
+          <p>
+            <strong>MAE:</strong> {trainingProgress.mae}
+          </p>
           {trainingProgress.val_loss && (
             <>
-              <p><strong>Val Loss:</strong> {trainingProgress.val_loss}</p>
-              <p><strong>Val MAE:</strong> {trainingProgress.val_mae}</p>
+              <p>
+                <strong>Val Loss:</strong> {trainingProgress.val_loss}
+              </p>
+              <p>
+                <strong>Val MAE:</strong> {trainingProgress.val_mae}
+              </p>
             </>
           )}
         </div>
       )}
 
-      {/* METRICS */}
-      {metrics && !isTraining && (
-        <div className="metrics">
-          <h3>Model Performance</h3>
-          <div className="metrics-grid">
-            <div className="metric-item"><span className="metric-label">MAE</span><span className="metric-value">{metrics.mae}</span></div>
-            <div className="metric-item"><span className="metric-label">RMSE</span><span className="metric-value">{metrics.rmse}</span></div>
-            <div className="metric-item"><span className="metric-label">MAPE</span><span className="metric-value">{metrics.mape}%</span></div>
-            <div className="metric-item"><span className="metric-label">R²</span><span className="metric-value">{metrics.r2}</span></div>
-            <div className="metric-item"><span className="metric-label">Accuracy</span><span className="metric-value">{metrics.accuracy}%</span></div>
-          </div>
-        </div>
-      )}
+      {/* METRICS + VALIDATION */}
+      {(metrics.male || metrics.female || (model && !isTraining)) && (
+        <>
+          <div className="metrics">
+            <h3>LSTM Model Performance Metrics</h3>
 
-      {/* VALIDATION RESULTS */}
-      {validationResults.length > 0 && (
-        <div className="training-results">
-          <h3>Testing Results (20% Split)</h3>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Year</th>
-                  <th>Actual</th>
-                  <th>Predicted</th>
-                  <th>Error</th>
-                </tr>
-              </thead>
-              <tbody>
-                {validationResults.map((row, i) => (
-                  <tr key={i}>
-                    <td>{row.year}</td>
-                    <td>{row.actual?.toLocaleString()}</td>
-                    <td>{row.predicted?.toLocaleString()}</td>
-                    <td className={row.error >= 0 ? "error-positive" : "error-negative"}>
-                      {row.error > 0 ? "+" : ""}{row.error?.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <h4>Male Emigrants</h4>
+            <div className="metrics-grid">
+              <div className="metric-item">
+                <span className="metric-label">MAE</span>
+                <span className="metric-value">
+                  {metrics.male?.mae ?? 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">RMSE</span>
+                <span className="metric-value">
+                  {metrics.male?.rmse ?? 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">MAPE</span>
+                <span className="metric-value">
+                  {metrics.male?.mape != null
+                    ? `${metrics.male.mape}%`
+                    : 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">R²</span>
+                <span className="metric-value">
+                  {metrics.male?.r2 ?? 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">Accuracy</span>
+                <span className="metric-value">
+                  {metrics.male?.accuracy != null
+                    ? `${metrics.male.accuracy}%`
+                    : 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            <h4>Female Emigrants</h4>
+            <div className="metrics-grid">
+              <div className="metric-item">
+                <span className="metric-label">MAE</span>
+                <span className="metric-value">
+                  {metrics.female?.mae ?? 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">RMSE</span>
+                <span className="metric-value">
+                  {metrics.female?.rmse ?? 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">MAPE</span>
+                <span className="metric-value">
+                  {metrics.female?.mape != null
+                    ? `${metrics.female.mape}%`
+                    : 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">R²</span>
+                <span className="metric-value">
+                  {metrics.female?.r2 ?? 'N/A'}
+                </span>
+              </div>
+              <div className="metric-item">
+                <span className="metric-label">Accuracy</span>
+                <span className="metric-value">
+                  {metrics.female?.accuracy != null
+                    ? `${metrics.female.accuracy}%`
+                    : 'N/A'}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
+
+          {validationResults.length > 0 && (
+            <div className="training-results">
+              <h3>Testing Results (20% Split)</h3>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Year</th>
+                      <th>Actual Male</th>
+                      <th>Predicted Male</th>
+                      <th>Error (Male)</th>
+                      <th>Actual Female</th>
+                      <th>Predicted Female</th>
+                      <th>Error (Female)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {validationResults.map((row, i) => (
+                      <tr key={i}>
+                        <td>{row.year}</td>
+                        <td>{row.actualMale?.toLocaleString() ?? 'N/A'}</td>
+                        <td>{row.predictedMale?.toLocaleString() ?? 'N/A'}</td>
+                        <td
+                          className={
+                            row.errorMale >= 0
+                              ? 'error-positive'
+                              : 'error-negative'
+                          }
+                        >
+                          {row.errorMale >= 0 ? '+' : ''}
+                          {row.errorMale?.toLocaleString() ?? 'N/A'}
+                        </td>
+                        <td>{row.actualFemale?.toLocaleString() ?? 'N/A'}</td>
+                        <td>{row.predictedFemale?.toLocaleString() ?? 'N/A'}</td>
+                        <td
+                          className={
+                            row.errorFemale >= 0
+                              ? 'error-positive'
+                              : 'error-negative'
+                          }
+                        >
+                          {row.errorFemale >= 0 ? '+' : ''}
+                          {row.errorFemale?.toLocaleString() ?? 'N/A'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* FORECAST CONTROLS */}
-      {maleModel && femaleModel && !isTraining && (
+      {model && !isTraining && (
         <div className="forecast-controls">
-          <h3>Generate Forecast</h3>
+          <h3>Generate LSTM Forecast</h3>
           <div className="forecast-input">
             <label>
               Years to forecast:
@@ -734,7 +559,9 @@ export default function LSTMForecast({ data }) {
                 min="1"
                 max="10"
                 value={forecastYears}
-                onChange={(e) => setForecastYears(parseInt(e.target.value) || 1)}
+                onChange={e =>
+                  setForecastYears(parseInt(e.target.value, 10) || 1)
+                }
               />
             </label>
             <button onClick={handleForecast}>Generate Forecast</button>
@@ -742,58 +569,130 @@ export default function LSTMForecast({ data }) {
         </div>
       )}
 
-      {/* CHART */}
-      {(Array.isArray(data) && data.length > 0 || forecasts.length > 0) && (
+      {/* CHART + FORECAST TABLE */}
+      {chartData.length > 0 && (
         <div className="chart-container">
-          <h3>Historical Data + Forecast</h3>
-          <ResponsiveContainer width="100%" height={450}>
-            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+          <h3>Historical + LSTM Forecast: Male, Female & Total Emigrants</h3>
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart
+              data={chartData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
-              <YAxis label={{ value: 'Emigrants', angle: -90, position: 'insideLeft' }} />
-              <Tooltip />
-              <Legend />
+              <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+              <YAxis
+                tick={{ fontSize: 12 }}
+                label={{
+                  value: 'Number of Emigrants',
+                  angle: -90,
+                  position: 'insideLeft',
+                  offset: 0,
+                  style: { fontSize: 14, fontWeight: 'bold' }
+                }}
+              />
+              <Tooltip
+                formatter={value => [value.toLocaleString(), 'Emigrants']}
+                labelFormatter={label => `Year: ${label}`}
+              />
+              <Legend verticalAlign="top" height={36} />
 
-              {/* TOTAL */}
-              <Line type="monotone" dataKey={(e) => e.isForecast ? null : e.total} stroke="#2ecc71" strokeWidth={2} dot={false} name="Total (Historical)" />
-              <Line type="monotone" dataKey={(e) => e.isForecast ? e.total : null} stroke="#2ecc71" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Total (Forecast)" />
+              {/* Historical Male */}
+              <Line
+                type="monotone"
+                dataKey={entry => (entry.isForecast ? null : entry.male)}
+                stroke="#3498db"
+                strokeWidth={2}
+                name="Male (Historical)"
+                dot={{ r: 3 }}
+                connectNulls={false}
+              />
 
-              {/* MALE */}
-              <Line type="monotone" dataKey={(e) => e.isForecast ? null : e.male} stroke="#3498db" strokeWidth={2} dot={false} name="Male (Historical)" />
-              <Line type="monotone" dataKey={(e) => e.isForecast ? e.male : null} stroke="#3498db" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Male (Forecast)" />
+              {/* Historical Female */}
+              <Line
+                type="monotone"
+                dataKey={entry => (entry.isForecast ? null : entry.female)}
+                stroke="#ff69b4"
+                strokeWidth={2}
+                name="Female (Historical)"
+                dot={{ r: 3 }}
+                connectNulls={false}
+              />
 
-              {/* FEMALE */}
-              <Line type="monotone" dataKey={(e) => e.isForecast ? null : e.female} stroke="#ff69b4" strokeWidth={2} dot={false} name="Female (Historical)" />
-              <Line type="monotone" dataKey={(e) => e.isForecast ? e.female : null} stroke="#ff69b4" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Female (Forecast)" />
+              {/* Historical Total */}
+              <Line
+                type="monotone"
+                dataKey={entry => (entry.isForecast ? null : entry.total)}
+                stroke="#4cb112ff"
+                strokeWidth={2}
+                name="Total (Historical)"
+                dot={{ r: 3 }}
+                connectNulls={false}
+              />
+
+              {/* Forecast Male */}
+              <Line
+                type="monotone"
+                dataKey={entry => (entry.isForecast ? entry.male : null)}
+                stroke="#3498db"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                name="Male (LSTM Forecast)"
+                dot={{ r: 4, fill: '#3498db' }}
+                connectNulls={false}
+              />
+
+              {/* Forecast Female */}
+              <Line
+                type="monotone"
+                dataKey={entry => (entry.isForecast ? entry.female : null)}
+                stroke="#ff69b4"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                name="Female (LSTM Forecast)"
+                dot={{ r: 4, fill: '#ff69b4' }}
+                connectNulls={false}
+              />
+
+              {/* Forecast Total */}
+              <Line
+                type="monotone"
+                dataKey={entry => (entry.isForecast ? entry.total : null)}
+                stroke="#4cb112ff"
+                strokeWidth={2}
+                name="Total (Calculated Forecast)"
+                dot={{ r: 4, fill: '#4cb112ff' }}
+                connectNulls={false}
+              />
             </LineChart>
           </ResponsiveContainer>
-        </div>
-      )}
 
-      {/* FORECAST RESULTS TABLE */}
-      {forecasts.length > 0 && (
-        <div className="forecast-results">
-          <h3>Forecast Summary</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Year</th>
-                <th>Male</th>
-                <th>Female</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {forecasts.map((f, i) => (
-                <tr key={i}>
-                  <td>{f.year}</td>
-                  <td>{f.male?.toLocaleString()}</td>
-                  <td>{f.female?.toLocaleString()}</td>
-                  <td>{f.total?.toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {forecasts.length > 0 && (
+            <div className="forecast-results">
+              <h3>LSTM Forecast Results</h3>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Year</th>
+                      <th>Predicted Male</th>
+                      <th>Predicted Female</th>
+                      <th>Calculated Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecasts.map((f, i) => (
+                      <tr key={i}>
+                        <td>{f.year}</td>
+                        <td>{f.male.toLocaleString()}</td>
+                        <td>{f.female.toLocaleString()}</td>
+                        <td>{f.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -801,16 +700,33 @@ export default function LSTMForecast({ data }) {
       <div className="info-box enhanced-info">
         <div className="info-header">
           <div className="info-icon">⚙️</div>
-          <h4>LSTM Model Configuration</h4>
+          <h4>LSTM Model Configuration for Sex Data</h4>
         </div>
-
         <ul className="info-list">
-          <li><span>Architecture:</span> 2 LSTM layers (50 units each)</li>
-          <li><span>Lookback Window:</span> {LOOKBACK} years</li>
-          <li><span>Training:</span> Male model + Female model + Combined total model</li>
-          <li><span>Target:</span> Next-year emigrant prediction</li>
-          <li><span>Validation:</span> 20% split (total model only)</li>
-          <li><span>Epochs:</span> 100 (total) · 80 (male/female)</li>
+          <li>
+            <span>Architecture:</span> 2 Dense / LSTM-style layers (50 units each)
+          </li>
+          <li>
+            <span>Lookback Window:</span> {LOOKBACK} years
+          </li>
+          <li>
+            <span>Input Features:</span> Male and Female emigrants per year
+          </li>
+          <li>
+            <span>Outputs:</span> Next-year Male &amp; Female emigrant counts
+          </li>
+          <li>
+            <span>Regularization:</span> Dropout 0.2
+          </li>
+          <li>
+            <span>Epochs:</span> 100 &nbsp;·&nbsp; Validation split 20%
+          </li>
+          <li>
+            <span>Loss:</span> Mean Squared Error (MSE)
+          </li>
+          <li>
+            <span>Scaling:</span> Min–Max normalization per feature
+          </li>
         </ul>
       </div>
     </div>

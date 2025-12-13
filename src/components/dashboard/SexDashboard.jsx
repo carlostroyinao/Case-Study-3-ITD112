@@ -24,13 +24,8 @@ const SexDashboard = () => {
   // Fetch data
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const data = await getSexGroups();
-        console.log("SexDashboard data:", data);
-        setSexGroups(data);
-      } catch (error) {
-        console.error("Error fetching sex data:", error);
-      }
+      const data = await getSexGroups();
+      setSexGroups(data);
     };
     fetchData();
   }, []);

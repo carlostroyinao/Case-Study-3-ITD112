@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
 import AgeDashboard from "../components/dashboard/AgeDashboard";
 import SexDashboard from "../components/dashboard/SexDashboard";
 import CivilStatusDashboard from "../components/dashboard/CivilStatusDashboard";
@@ -66,7 +65,7 @@ const Dashboard = () => {
     },
   ];
 
-  const categoryTables = [
+  const categoryDashboard = [
     <AgeDashboard />,
     <SexDashboard />,
     <CivilStatusDashboard />,
@@ -93,83 +92,88 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Category Section */}
-      <div className="category-post">
-          <div className="row">
-            <div className="col-lg-12">
-              <div className="naccs">
-                <div className="grid">
-                  <div className="menu">
-                    {categories.map((cat, index) => (
-                      <div
-                        key={index}
-                        className={`${index === 0 ? "first-thumb" : ""} ${
-                          index === categories.length - 1 ? "last-thumb" : ""
-                        } ${activeIndex === index ? "active" : ""}`}
-                        onClick={() => setActiveIndex(index)}
-                        style={{ cursor: "pointer" }}
-                      >
-                        <div className="thumb">
-                          <span className="icon">
-                            <img src={cat.icon} alt={cat.name} />
-                            <h4>{cat.name}</h4>
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+      {/* Category Selector */}
+      <div
+        className="container"
+        style={{
+          marginTop: "20px",
+          marginBottom: "20px",
+        }}
+      >
+        <div className="row">
+          <div className="col-lg-12">
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "nowrap",
+                gap: "8px",
+                justifyContent: "space-between",
+                alignItems: "stretch",
+                paddingBottom: "6px",
+                width: "100%",
+              }}
+            >
+              {categories.map((cat, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  style={{
+                    border: activeIndex === index ? "2px solid #4b6cb7" : "1px solid #d0d0d0",
+                    background: activeIndex === index ? "#f3f7ff" : "#fff",
+                    borderRadius: "10px",
+                    padding: "8px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                    boxShadow: activeIndex === index ? "0 3px 10px rgba(0,0,0,0.07)" : "0 2px 6px rgba(0,0,0,0.05)",
+                    transition: "all 0.15s ease-in-out",
+                    whiteSpace: "nowrap",
+                    flex: "1 1 0",
+                    minWidth: 0,
+                  }}
+                >
+                  <img
+                    src={cat.icon}
+                    alt={cat.name}
+                    style={{ width: "26px", height: "26px", objectFit: "contain" }}
+                  />
+                  <span style={{ fontWeight: 600, fontSize: "0.95rem", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {cat.name}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
+        </div>
       </div>
 
-      {/* Category Section */}
-      <div className="category-post">
-        <div className="container">
-          <div className="row">
-            <div className="col-lg-12">
-              <div className="naccs">
-                <div className="grid">
-                  <ul className="nacc">
-                    {categoryContent.map((content, index) => (
-                      <li
-                        key={index}
-                        className={activeIndex === index ? "active" : ""}
-                      >
-                        <div className="thumb">
-                          <div className="row">
-                            <div className="col-lg-12">
-                              <div className="top-content d-flex align-items-center">
-                                {/* Left side: Category Icon and Title */}
-                                <div className="d-flex align-items-center me-4">
-                                  <img
-                                    src={categories[index].icon}
-                                    alt=""
-                                    className="me-2"
-                                    style={{ width: "40px", height: "40px", objectFit: "contain" }}
-                                  />
-                                  <h4 className="mb-0">{content.title}</h4>
-                                </div>
+      {/* Active Dashboard */}
+      <div className="container" style={{ marginBottom: "40px" }}>
+        <div className="row">
+          <div className="col-lg-12">
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              marginBottom: "12px",
+              flexWrap: "wrap",
+            }}>
+              <img
+                src={categories[activeIndex].icon}
+                alt={categories[activeIndex].name}
+                style={{ width: "36px", height: "36px", objectFit: "contain" }}
+              />
+              <div>
+                <h4 style={{ margin: 0 }}>{categoryContent[activeIndex].title}</h4>
+                <p style={{ margin: 0, color: "#555" }}>{categoryContent[activeIndex].description}</p>
+              </div>
+            </div>
 
-                                {/* Right side: Description */}
-                                <p className="mb-0">{content.description}</p>
-                              </div>
-                            </div>
-                            <div className="col-lg-12">
-                              <div className="general-info">
-                                 {/* Render the appropriate data table */}
-                                <div className="data-table-section">
-                                  {categoryTables[index] || <p>No data available</p>}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+            <div className="general-info" style={{ padding: "12px 0" }}>
+              <div className="data-table-section">
+                {categoryDashboard[activeIndex] || <p>No data available</p>}
               </div>
             </div>
           </div>

@@ -13,29 +13,13 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// Auto-fill missing years in civil status dataset
-const normalizeCivilStatusData = (data, allYears, keys) => {
-  const yearMap = new Map(data.map((row) => [row.year, row]));
-
-  return allYears.map((year) => {
-    if (yearMap.has(year)) return yearMap.get(year);
-
-    // If year missing → fill with zero values
-    const emptyRow = { year };
-    keys.forEach((key) => {
-      emptyRow[key] = 0;
-    });
-    return emptyRow;
-  });
-};
-
 const CivilStatusDashboard = () => {
   const [emigrants, setEmigrants] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [filteredYear, setFilteredYear] = useState("All");
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
-  const [chartType, setChartType] = useState("bar"); // 'bar' | 'line'
+  const [chartType, setChartType] = useState("bar");
 
   const placeholders = {
     single: "Single",
@@ -48,37 +32,25 @@ const CivilStatusDashboard = () => {
 
   const allStatusKeys = Object.keys(placeholders);
 
-  // Fetch data
+  // Automatically fix Recharts width issue when component becomes visible
+  useEffect(() => {
+    const delayResize = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 150);
+
+    return () => clearTimeout(delayResize);
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       const data = await getEmigrants();
-      console.log("Civil status response:", data);
-
-      if (!Array.isArray(data) || data.length === 0) {
-        setEmigrants([]);
-        return;
-      }
-
-      // Extract all unique years
-      const allYears = Array.from(new Set(data.map((d) => d.year))).sort(
-        (a, b) => a - b
-      );
-
-      // Normalize dataset — fill missing years
-      const normalized = normalizeCivilStatusData(data, allYears, allStatusKeys);
-
-      setEmigrants(normalized);
+      setEmigrants(data);
     };
-
     fetchData();
   }, []);
 
-  // Unique years for dropdown
-  const years = [...new Set(emigrants.map((row) => row.year))].sort(
-    (a, b) => a - b
-  );
+  const years = [...new Set(emigrants.map((row) => row.year))].sort((a, b) => a - b);
 
-  // Filter logic
   const filteredData = emigrants.filter((row) => {
     const matchYear = filteredYear === "All" || row.year === Number(filteredYear);
     const matchRange =
@@ -87,10 +59,10 @@ const CivilStatusDashboard = () => {
     return matchYear && matchRange;
   });
 
-  // Chart data
   let chartData;
+
+  // ALL STATUS (category view)
   if (selectedStatus === "All") {
-    // Summarize totals per status
     const totals = allStatusKeys.reduce((acc, key) => {
       acc[key] = filteredData.reduce((sum, row) => sum + (row[key] || 0), 0);
       return acc;
@@ -100,8 +72,10 @@ const CivilStatusDashboard = () => {
       category: placeholders[key],
       count: totals[key],
     }));
-  } else {
-    // Trend for one status over years
+  }
+
+  // SINGLE STATUS (year trend view)
+  else {
     chartData = filteredData
       .slice()
       .sort((a, b) => a.year - b.year)
@@ -111,7 +85,6 @@ const CivilStatusDashboard = () => {
       }));
   }
 
-  // Total counts badges
   const totalCounts = allStatusKeys.reduce((acc, key) => {
     acc[key] = filteredData.reduce((sum, row) => sum + (row[key] || 0), 0);
     return acc;
@@ -135,6 +108,7 @@ const CivilStatusDashboard = () => {
           marginBottom: "20px",
         }}
       >
+        {/* Year Filter */}
         <div>
           <label style={{ fontWeight: "bold" }}>Filter by Year:</label>
           <select
@@ -144,13 +118,12 @@ const CivilStatusDashboard = () => {
           >
             <option value="All">All Years</option>
             {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
+              <option key={year} value={year}>{year}</option>
             ))}
           </select>
         </div>
 
+        {/* Year Range */}
         <div>
           <label style={{ fontWeight: "bold" }}>Year Range:</label>
           <input
@@ -158,19 +131,34 @@ const CivilStatusDashboard = () => {
             placeholder="From"
             value={yearFrom}
             onChange={(e) => setYearFrom(e.target.value)}
-            style={{ width: "90px", margin: "0 5px", padding: "5px" }}
+            style={{ width: "90px", margin: "0 5px", padding: "6px" }}
           />
           <input
             type="number"
             placeholder="To"
             value={yearTo}
             onChange={(e) => setYearTo(e.target.value)}
-            style={{ width: "90px", padding: "5px" }}
+            style={{ width: "90px", padding: "6px" }}
           />
+        </div>
+
+        {/* Status selector */}
+        <div>
+          <label style={{ fontWeight: "bold" }}>Civil Status:</label>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            style={{ marginLeft: "10px", padding: "6px", borderRadius: "5px" }}
+          >
+            <option value="All">All</option>
+            {allStatusKeys.map((key) => (
+              <option key={key} value={key}>{placeholders[key]}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* Badges */}
+      {/* Totals Badges */}
       <div
         style={{
           display: "flex",
@@ -196,7 +184,7 @@ const CivilStatusDashboard = () => {
         ))}
       </div>
 
-      {/* Chart Type Toggle */}
+      {/* Chart Tabs */}
       <div style={{ textAlign: "center", marginBottom: "20px" }}>
         <button
           onClick={() => setChartType("bar")}
@@ -229,33 +217,35 @@ const CivilStatusDashboard = () => {
       </div>
 
       {/* Chart */}
-      <ResponsiveContainer width="100%" height={400}>
-        {chartType === "bar" ? (
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey={selectedStatus === "All" ? "category" : "year"} />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="count" fill={mainColor} />
-          </BarChart>
-        ) : (
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey={selectedStatus === "All" ? "category" : "year"} />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="count"
-              stroke={mainColor}
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
-        )}
-      </ResponsiveContainer>
+      <div style={{ width: "100%", height: 400 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === "bar" ? (
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={selectedStatus === "All" ? "category" : "year"} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="count" fill={mainColor} />
+            </BarChart>
+          ) : (
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={selectedStatus === "All" ? "category" : "year"} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="count"
+                stroke={mainColor}
+                strokeWidth={2}
+                dot={false}
+              />
+            </LineChart>
+          )}
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 };

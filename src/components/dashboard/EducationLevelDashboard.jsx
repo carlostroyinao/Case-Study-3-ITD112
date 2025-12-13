@@ -75,13 +75,8 @@ const EducationLevelDashboard = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const data = await getEducationLevels();
-        console.log("EducationLevelDashboard data:", data);
-        setEducationData(data);
-      } catch (error) {
-        console.error("Error fetching education level data:", error);
-      }
+      const data = await getEducationLevels();
+      setEducationData(data);
     };
     fetchData();
   }, []);
